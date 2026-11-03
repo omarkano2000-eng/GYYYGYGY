@@ -14,15 +14,18 @@ TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "5746591255"))
 
 PROOFS_LINK = "@Card_cvvl"
-SUPPORT_LINK = "@Card_cvvl"
+SUPPORT_LINK = "@b9j01" 
+
 WELCOME_IMG_URL = "https://i.postimg.cc/W3wqHpRY/C38048D5-D90A-4621-9042-EBF53C2C03CF.png"
+
 WALLETS = {"usdt_bep20": "0x85a8c35aD7c9CfB7812269a6E597bDaAC3d9Bd2E"}
 PAY_METHODS = {"usdt_bep20": "USDT (BEP20)"}
 
+# الأسعار مخزنة هنا بناءً على الصور
 PRICES = {
-    "visa":    {"10": 5,  "25": 11, "50": 20, "100": 38},
-    "master":  {"10": 5,  "25": 11, "50": 20, "100": 38},
-    "non_vbv": {"50": 50},
+    "3d_usa": {"price": 25, "name": "بطاقة أمريكية 3D"},
+    "3d_canada": {"price": 25, "name": "بطاقة كندية 3D"}, # افترضت نفس السعر للكندية
+    "non_vbv_usa": {"price": 35, "name": "بطاقة Non vbv أمريكية"},
 }
 
 # ============ STORAGE ============
@@ -53,11 +56,19 @@ def validate_coupon(code: str):
     if c["used"] >= c["max_uses"]: return False, 0, "❌ الكود خلصت استخداماته."
     return True, c["percent"], f"✅ تم تطبيق خصم {c['percent']}%"
 
+# الحالات
 CARD_TYPE, AMOUNT, COUPON, PAYMENT = range(4)
 
-# ============ HANDLERS ============
+# ============ MENU ============
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    welcome_text = ("👋 <b>أهلاً بك في Card.cvvl</b>\n\nالحل الأول والأسرع لبطاقات الدفع الرقمية والاشتراكات 🌍\n\n✅ <b>تسليم فوري</b>\n✅ <b>ضمان استبدال</b>\n✅ <b>دعم فني 24/7</b>\n\nاختر من القائمة أدناه للبدء:")
+    welcome_text = (
+        "👋 <b>أهلاً بك في Card.cvvl</b>\n\n"
+        "الحل الأول والأسرع لبطاقات الدفع الرقمية والاشتراكات 🌍\n\n"
+        "✅ <b>تسليم فوري</b>\n"
+        "✅ <b>ضمان استبدال</b>\n"
+        "✅ <b>دعم فني 24/7</b>\n\n"
+        "اختر من القائمة أدناه للبدء:"
+    )
     kb = [
         [InlineKeyboardButton("🛒 شراء بطاقة الآن", callback_data="buy")],
         [InlineKeyboardButton("💰 عرض الأسعار", callback_data="prices")],
@@ -72,12 +83,9 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def prices(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     text = "💳 <b>قائمة الأسعار:</b>\n\n"
-    for ctype, tiers in PRICES.items():
-        name = ctype.replace("_", " ").upper()
-        text += f"<b>{name}</b>\n"
-        for amt, price in tiers.items(): text += f"  • {amt}$ → {price}$\n"
-        text += "\n"
-    text += "💵 <b>الدفع:</b> USDT (BEP20)\n🎟️ عندك كوبون خصم؟ استخدمه وقت الشراء."
+    for key, item in PRICES.items():
+        text += f"• {item['name']}: {item['price']} USDT\n"
+    text += "\n💵 <b>الدفع:</b> USDT (BEP20)\n🎟️ عندك كوبون خصم؟ استخدمه وقت الشراء."
     await update.callback_query.message.reply_text(text, parse_mode="HTML")
 
 async def proofs(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -86,47 +94,119 @@ async def proofs(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def support(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.message.reply_text(f"📞 <b>تحتاج مساعدة؟</b>\nتواصل معنا مباشرة: {SUPPORT_LINK}\n\nفريقنا جاهز للرد على استفساراتك في أي وقت.", parse_mode="HTML")
 
+# ============ BUY FLOW ============
 async def buy_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     try: await q.answer()
     except: pass
+    # مطابق للصورة الأولى
+    text = "عروض البطاقات المسروقة\n\nنسبة نجاح 65%"
     kb = [
-        [InlineKeyboardButton("💳 Visa", callback_data="visa"), InlineKeyboardButton("💳 Mastercard", callback_data="master")],
-        [InlineKeyboardButton("🔥 Non VBV", callback_data="non_vbv")],
+        [InlineKeyboardButton("بطاقات 3D", callback_data="cat_3d")],
+        [InlineKeyboardButton("بطاقات Non vbv", callback_data="cat_non_vbv")],
         [InlineKeyboardButton("🔙 رجوع", callback_data="back_to_start")]
     ]
-    await q.message.reply_text("💳 <b>اختر نوع البطاقة التي تحتاجها:</b>", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
+    await q.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb))
     return CARD_TYPE
 
 async def card_type(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     try: await q.answer()
     except: pass
+    
     if q.data == "back_to_start":
         class FakeMessage:
             def __init__(self, msg): self.message = msg
         await start(FakeMessage(q.message), ctx)
         return ConversationHandler.END
-    ctx.user_data["type"] = q.data
-    tiers = PRICES[q.data]
-    kb = [[InlineKeyboardButton(f"{amt}$ — {price}$", callback_data=amt)] for amt, price in tiers.items()]
-    kb.append([InlineKeyboardButton("🔙 رجوع", callback_data="back_to_start")])
-    await q.message.reply_text("💰 <b>اختر المبلغ:</b>", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
-    return AMOUNT
 
-async def amount(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if q.data == "cat_3d":
+        # مطابق للصورة الثانية
+        text = "يتوفر هنا أنواع البطاقات المسروقه"
+        kb = [
+            [InlineKeyboardButton("بطاقة أمريكية 🇺🇸", callback_data="show_3d_usa")],
+            [InlineKeyboardButton("بطاقة كندية 🇨🇦", callback_data="show_3d_canada")],
+            [InlineKeyboardButton("🔙 رجوع", callback_data="buy")]
+        ]
+        await q.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb))
+        return CARD_TYPE
+    
+    if q.data == "cat_non_vbv":
+        # عرض تفاصيل Non VBV مطابق للصورة الرابعة
+        ctx.user_data["type"] = "non_vbv_usa"
+        text = (
+            "📝 اسم السلعة: بطاقة Non vbv أمريكية 🇺🇸\n"
+            "📝 وصف السلعة: بطاقة Non Vbv لأمريكية\n\n"
+            "عبارة عن بطاقة بدون كود بنك\n\n"
+            "تصنف من لبطاقات لمسروقه\n\n"
+            "ملاحظه البطاقات المسروقه غير معروف رصيدها ولا يمكن انه نعرف + نسبة نجاح دفع منها 70%\n\n"
+            f"💲 السعر الحالي: {PRICES['non_vbv_usa']['price']} USDT\n"
+            "✅ حالة التوفر: عند طلب\n\n"
+            "❓ - هل أنت متأكد من رغبتك في الشراء؟"
+        )
+        kb = [
+            [InlineKeyboardButton("✅ نعم، متأكد", callback_data="confirm_purchase")],
+            [InlineKeyboardButton("❌ لا، رجوع", callback_data="buy")]
+        ]
+        await q.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb))
+        return AMOUNT
+
+    return CARD_TYPE
+
+async def show_product(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     try: await q.answer()
     except: pass
-    if q.data == "back_to_start":
-        class FakeMessage:
-            def __init__(self, msg): self.message = msg
-        await start(FakeMessage(q.message), ctx)
+
+    if q.data == "show_3d_usa":
+        ctx.user_data["type"] = "3d_usa"
+        # مطابق للصورة الثالثة
+        text = (
+            "📝 اسم السلعة: بطاقة أمريكية 🇺🇸\n"
+            "📝 وصف السلعة: بطاقات 3D\n\n"
+            "عباره عن 3D تستخدم في دفع في روابط تبرع + مكاين المونيا + جوجل بلا + ابستور\n\n"
+            "وتستخدم بدفع لينكات 2D\n\n"
+            f"💲 السعر الحالي: {PRICES['3d_usa']['price']} USDT\n"
+            "✅ حالة التوفر: عند طلب\n\n"
+            "❓ - هل أنت متأكد من رغبتك في الشراء؟"
+        )
+    elif q.data == "show_3d_canada":
+        ctx.user_data["type"] = "3d_canada"
+        text = (
+            "📝 اسم السلعة: بطاقة كندية 🇨🇦\n"
+            "📝 وصف السلعة: بطاقات 3D\n\n"
+            "عباره عن 3D تستخدم في دفع في روابط تبرع + مكاين المونيا + جوجل بلا + ابستور\n\n"
+            "وتستخدم بدفع لينكات 2D\n\n"
+            f"💲 السعر الحالي: {PRICES['3d_canada']['price']} USDT\n"
+            "✅ حالة التوفر: عند طلب\n\n"
+            "❓ - هل أنت متأكد من رغبتك في الشراء؟"
+        )
+    
+    kb = [
+        [InlineKeyboardButton("✅ نعم، متأكد", callback_data="confirm_purchase")],
+        [InlineKeyboardButton("❌ لا، رجوع", callback_data="buy")]
+    ]
+    await q.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb))
+    return AMOUNT
+
+async def confirm_purchase(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    try: await q.answer()
+    except: pass
+
+    if q.data == "buy":
+         return await buy_start(update, ctx)
+
+    # حفظ السعر الأساسي بناءً على المنتج المختار
+    product_type = ctx.user_data.get("type")
+    if not product_type:
+        await q.message.reply_text("⚠️ حدث خطأ، يرجى إرسال /start من جديد.")
         return ConversationHandler.END
-    ctx.user_data["amount"] = q.data
-    ctx.user_data["base_price"] = PRICES[ctx.user_data["type"]][q.data]
+
+    ctx.user_data["base_price"] = PRICES[product_type]["price"]
     ctx.user_data["coupon"] = None
     ctx.user_data["percent"] = 0
+
     await q.message.reply_text("🎟️ <b>هل لديك كود خصم؟</b>\nاكتب الكود هنا، أو اضغط /skip للمتابعة بدون كوبون.", parse_mode="HTML")
     return COUPON
 
@@ -158,6 +238,7 @@ async def payment(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if "base_price" not in ctx.user_data or "type" not in ctx.user_data:
         await q.message.reply_text("⚠️ انتهت صلاحية الجلسة. يرجى إرسال /start والمحاولة مرة أخرى.")
         return ConversationHandler.END
+    
     ctx.user_data["pay"] = q.data
     d = ctx.user_data
     user_id = q.from_user.id
@@ -165,18 +246,28 @@ async def payment(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     base = d["base_price"]
     percent = d["percent"]
     final = round(base * (1 - percent / 100), 2)
-    order = {"id": len(ORDERS) + 1, "user_id": user_id, "username": username, "type": d["type"], "amount": d["amount"], "base": base, "coupon": d["coupon"], "percent": percent, "final": final, "pay": d["pay"], "status": "pending"}
+    
+    order = {"id": len(ORDERS) + 1, "user_id": user_id, "username": username, "type": d["type"], "base": base, "coupon": d["coupon"], "percent": percent, "final": final, "pay": d["pay"], "status": "pending"}
     ORDERS.append(order)
     if d["coupon"]: COUPONS[d["coupon"]]["used"] += 1
     save_data()
+    
     wallet_address = WALLETS.get(d["pay"], "⚠️ No wallet available")
     pay_name = PAY_METHODS[d["pay"]]
     coupon_line = f"🎟️ كوبون: {d['coupon']} (-{percent}%)\n" if d["coupon"] else ""
-    card_name = d["type"].replace("_", " ").upper()
-    admin_msg = (f"🆕 طلب #{order['id']}\n\n👤 @{username} ({user_id})\n💳 {card_name} — {d['amount']}$\n💵 الأصلي: {base}$\n{coupon_line}✅ المطلوب: {final}$\n💳 الدفع: {pay_name}\n")
+    product_name = PRICES[d["type"]]["name"]
+    
+    admin_msg = (f"🆕 طلب #{order['id']}\n\n👤 @{username} ({user_id})\n💳 {product_name}\n💵 الأصلي: {base}$\n{coupon_line}✅ المطلوب: {final}$\n💳 الدفع: {pay_name}\n")
     try: await ctx.bot.send_message(ADMIN_ID, admin_msg)
     except Exception as e: logging.error(f"Failed to send admin message: {e}")
-    user_msg = (f"✅ <b>تم استلام طلبك #{order['id']} بنجاح!</b>\n\n💵 <b>المبلغ المطلوب:</b> {final}$\n\n💳 <b>تفاصيل الدفع:</b>\nأرسل مبلغ {final}$ من نوع {pay_name} إلى العنوان التالي:\n<code>{wallet_address}</code>\n\n⚠️ <b>تنبيه:</b> تأكد أنك ترسل عبر شبكة <b>BEP20 (BSC)</b> فقط.\n\n🔹 <b>بعد إتمام التحويل، أرسل لنا صورة التحويل أو رقم العملية (TXID) هنا.</b>")
+    
+    user_msg = (f"✅ <b>تم استلام طلبك #{order['id']} بنجاح!</b>\n\n"
+                f"💵 <b>المبلغ المطلوب:</b> {final}$\n\n"
+                f"💳 <b>تفاصيل الدفع:</b>\n"
+                f"أرسل مبلغ {final}$ من نوع {pay_name} إلى العنوان التالي:\n"
+                f"<code>{wallet_address}</code>\n\n"
+                f"⚠️ <b>تنبيه:</b> تأكد أنك ترسل عبر شبكة <b>BEP20 (BSC)</b> فقط.\n\n"
+                f"🔹 <b>بعد إتمام التحويل، أرسل لنا صورة التحويل أو رقم العملية (TXID) هنا.</b>")
     try: await q.message.reply_text(user_msg, parse_mode="HTML")
     except Exception as e:
         logging.error(f"Failed to send user message: {e}")
@@ -187,6 +278,7 @@ async def cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("تم إلغاء العملية. أرسل /start للبدء من جديد.")
     return ConversationHandler.END
 
+# ============ ADMIN ============
 def admin_only(func):
     async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if update.effective_user.id != ADMIN_ID: return
@@ -219,7 +311,7 @@ async def delcoupon(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def orders(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not ORDERS: await update.message.reply_text("ما في طلبات."); return
     text = "آخر 10 طلبات:\n\n"
-    for o in ORDERS[-10:]: text += f"#{o['id']} — @{o['username']} — {o['type'].replace('_', ' ').upper()} {o['amount']}$ — {o['final']}$ — {o['status']}\n"
+    for o in ORDERS[-10:]: text += f"#{o['id']} — @{o['username']} — {o['type']} — {o['final']}$ — {o['status']}\n"
     await update.message.reply_text(text)
 
 @admin_only
@@ -234,17 +326,30 @@ async def markdone(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logging.error(msg="Exception while handling an update:", exc_info=context.error)
 
-# ============ MAIN (Webhook Mode) ============
+# ============ MAIN ============
 def main():
     load_data()
     app = Application.builder().token(TOKEN).build()
-
+    
     conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(buy_start, pattern="^buy$")],
-        states={CARD_TYPE: [CallbackQueryHandler(card_type)], AMOUNT: [CallbackQueryHandler(amount)], COUPON: [MessageHandler(filters.TEXT & ~filters.COMMAND, coupon_input), CommandHandler("skip", coupon_skip)], PAYMENT: [CallbackQueryHandler(payment)]},
+        states={
+            CARD_TYPE: [
+                CallbackQueryHandler(card_type, pattern="^(cat_3d|cat_non_vbv|back_to_start)$"),
+                CallbackQueryHandler(show_product, pattern="^(show_3d_usa|show_3d_canada)$")
+            ],
+            AMOUNT: [
+                CallbackQueryHandler(confirm_purchase, pattern="^(confirm_purchase|buy)$")
+            ],
+            COUPON: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, coupon_input), 
+                CommandHandler("skip", coupon_skip)
+            ],
+            PAYMENT: [CallbackQueryHandler(payment)]
+        },
         fallbacks=[CommandHandler("cancel", cancel)], per_message=False 
     )
-
+    
     app.add_handler(CommandHandler("start", start)); app.add_handler(CommandHandler("addcoupon", addcoupon))
     app.add_handler(CommandHandler("listcoupons", listcoupons)); app.add_handler(CommandHandler("delcoupon", delcoupon))
     app.add_handler(CommandHandler("orders", orders)); app.add_handler(CommandHandler("done", markdone))
@@ -252,18 +357,12 @@ def main():
     app.add_handler(CallbackQueryHandler(support, pattern="^support$")); app.add_handler(conv)
     app.add_error_handler(error_handler)
 
-    # ==== Webhook Setup ====
     PORT = int(os.environ.get("PORT", 8443))
     RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
     
     if RENDER_EXTERNAL_URL:
         WEBHOOK_URL = f"{RENDER_EXTERNAL_URL}/{TOKEN}"
-        app.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            url_path=TOKEN,
-            webhook_url=WEBHOOK_URL
-        )
+        app.run_webhook(listen="0.0.0.0", port=PORT, url_path=TOKEN, webhook_url=WEBHOOK_URL)
     else:
         app.run_polling()
 
