@@ -1,8 +1,6 @@
 import json
 import logging
 import os
-from flask import Flask
-from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
@@ -11,33 +9,14 @@ from telegram.ext import (
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-# ============ KEEP ALIVE (خدعة لإبقاء Render شغال) ============
-web_app = Flask('')
-
-@web_app.route('/')
-def home():
-    return "Bot is running successfully!"
-
-def run_web():
-    port = int(os.environ.get("PORT", 8080))
-    web_app.run(host='0.0.0.0', port=port)
-
-def keep_alive():
-    t = Thread(target=run_web)
-    t.start()
-# ==============================================================
-
 # ============ CONFIG ============
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "5746591255"))
-
 PROOFS_LINK = "@Card_cvvl"
 SUPPORT_LINK = "@Card_cvvl"
 WELCOME_IMG_URL = "https://i.postimg.cc/W3wqHpRY/C38048D5-D90A-4621-9042-EBF53C2C03CF.png"
-
 WALLETS = {"usdt_bep20": "0x85a8c35aD7c9CfB7812269a6E597bDaAC3d9Bd2E"}
 PAY_METHODS = {"usdt_bep20": "USDT (BEP20)"}
-
 PRICES = {
     "visa":    {"10": 5,  "25": 11, "50": 20, "100": 38},
     "master":  {"10": 5,  "25": 11, "50": 20, "100": 38},
@@ -74,6 +53,7 @@ def validate_coupon(code: str):
 
 CARD_TYPE, AMOUNT, COUPON, PAYMENT = range(4)
 
+# ============ HANDLERS (نفس الكود السابق) ============
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     welcome_text = ("👋 <b>أهلاً بك في Card.cvvl</b>\n\nالحل الأول والأسرع لبطاقات الدفع الرقمية والاشتراكات 🌍\n\n✅ <b>تسليم فوري</b>\n✅ <b>ضمان استبدال</b>\n✅ <b>دعم فني 24/7</b>\n\nاختر من القائمة أدناه للبدء:")
     kb = [
@@ -252,23 +232,39 @@ async def markdone(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logging.error(msg="Exception while handling an update:", exc_info=context.error)
 
+# ============ MAIN (Webhook Mode) ============
 def main():
-    keep_alive() # تشغيل خدعة إبقاء Render مستيقظاً
     load_data()
     app = Application.builder().token(TOKEN).build()
+
     conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(buy_start, pattern="^buy$")],
         states={CARD_TYPE: [CallbackQueryHandler(card_type)], AMOUNT: [CallbackQueryHandler(amount)], COUPON: [MessageHandler(filters.TEXT & ~filters.COMMAND, coupon_input), CommandHandler("skip", coupon_skip)], PAYMENT: [CallbackQueryHandler(payment)]},
         fallbacks=[CommandHandler("cancel", cancel)], per_message=False 
     )
+
     app.add_handler(CommandHandler("start", start)); app.add_handler(CommandHandler("addcoupon", addcoupon))
     app.add_handler(CommandHandler("listcoupons", listcoupons)); app.add_handler(CommandHandler("delcoupon", delcoupon))
     app.add_handler(CommandHandler("orders", orders)); app.add_handler(CommandHandler("done", markdone))
     app.add_handler(CallbackQueryHandler(prices, pattern="^prices$")); app.add_handler(CallbackQueryHandler(proofs, pattern="^proofs$"))
     app.add_handler(CallbackQueryHandler(support, pattern="^support$")); app.add_handler(conv)
     app.add_error_handler(error_handler)
-    print("bot running...")
-    app.run_polling()
+
+    # ==== Webhook Setup ====
+    PORT = int(os.environ.get("PORT", 8443))
+    RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
+    
+    if RENDER_EXTERNAL_URL:
+        WEBHOOK_URL = f"{RENDER_EXTERNAL_URL}/{TOKEN}"
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path=TOKEN,
+            webhook_url=WEBHOOK_URL
+        )
+    else:
+        # Fallback for local testing
+        app.run_polling()
 
 if __name__ == "__main__":
     main()
