@@ -12,11 +12,13 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 # ============ CONFIG ============
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "5746591255"))
+
 PROOFS_LINK = "@Card_cvvl"
 SUPPORT_LINK = "@Card_cvvl"
 WELCOME_IMG_URL = "https://i.postimg.cc/W3wqHpRY/C38048D5-D90A-4621-9042-EBF53C2C03CF.png"
 WALLETS = {"usdt_bep20": "0x85a8c35aD7c9CfB7812269a6E597bDaAC3d9Bd2E"}
 PAY_METHODS = {"usdt_bep20": "USDT (BEP20)"}
+
 PRICES = {
     "visa":    {"10": 5,  "25": 11, "50": 20, "100": 38},
     "master":  {"10": 5,  "25": 11, "50": 20, "100": 38},
@@ -53,7 +55,7 @@ def validate_coupon(code: str):
 
 CARD_TYPE, AMOUNT, COUPON, PAYMENT = range(4)
 
-# ============ HANDLERS (نفس الكود السابق) ============
+# ============ HANDLERS ============
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     welcome_text = ("👋 <b>أهلاً بك في Card.cvvl</b>\n\nالحل الأول والأسرع لبطاقات الدفع الرقمية والاشتراكات 🌍\n\n✅ <b>تسليم فوري</b>\n✅ <b>ضمان استبدال</b>\n✅ <b>دعم فني 24/7</b>\n\nاختر من القائمة أدناه للبدء:")
     kb = [
@@ -89,7 +91,7 @@ async def buy_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     try: await q.answer()
     except: pass
     kb = [
-        [InlineKeyboardButton("💳 Visa", callback_data="visa"), InlineKeyboardButton("💳 MasterCard", callback_data="master")],
+        [InlineKeyboardButton("💳 Visa", callback_data="visa"), InlineKeyboardButton("💳 Mastercard", callback_data="master")],
         [InlineKeyboardButton("🔥 Non VBV", callback_data="non_vbv")],
         [InlineKeyboardButton("🔙 رجوع", callback_data="back_to_start")]
     ]
@@ -263,7 +265,6 @@ def main():
             webhook_url=WEBHOOK_URL
         )
     else:
-        # Fallback for local testing
         app.run_polling()
 
 if __name__ == "__main__":
