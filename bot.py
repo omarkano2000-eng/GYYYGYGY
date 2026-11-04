@@ -24,7 +24,7 @@ PAY_METHODS = {"usdt_bep20": "USDT (BEP20)"}
 # الأسعار مخزنة هنا بناءً على الصور
 PRICES = {
     "3d_usa": {"price": 25, "name": "بطاقة أمريكية 3D"},
-    "3d_canada": {"price": 25, "name": "بطاقة كندية 3D"}, # افترضت نفس السعر للكندية
+    "3d_canada": {"price": 25, "name": "بطاقة كندية 3D"},
     "non_vbv_usa": {"price": 35, "name": "بطاقة Non vbv أمريكية"},
 }
 
@@ -59,15 +59,25 @@ def validate_coupon(code: str):
 # الحالات
 CARD_TYPE, AMOUNT, COUPON, PAYMENT = range(4)
 
-# ============ MENU ============
+# ============ MENU (تم تعديل الرسالة هنا) ============
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
-        "👋 <b>أهلاً بك في Card.cvvl</b>\n\n"
-        "الحل الأول والأسرع لبطاقات الدفع الرقمية والاشتراكات 🌍\n\n"
-        "✅ <b>تسليم فوري</b>\n"
-        "✅ <b>ضمان استبدال</b>\n"
-        "✅ <b>دعم فني 24/7</b>\n\n"
-        "اختر من القائمة أدناه للبدء:"
+        "👋 <b>أهلاً بك في متجر Card.cvvl</b>\n"
+        "بوابتك الأولى للبطاقات الائتمانية والاشتراكات الرقمية! 🌍\n\n"
+        "🔥 <b>ماذا نقدم لك؟</b>\n"
+        "نحن نوفر لك <b>بطاقات فيزا مسروقة (Visa/Mastercard)</b> عالية الجودة، مفحوصة ومضمونة، لاستخدامها في:\n"
+        "• الدفع الإلكتروني والمتاجر (Shopping).\n"
+        "• روابط التبرع، الإعلانات، واشتراكات التطبيقات.\n"
+        "• تفعيل الحسابات (PayPal, Google Play, App Store).\n"
+        "• بطاقات تدعم دفع 2D و 3D.\n\n"
+        "📊 <b>أنواع البطاقات المتوفرة لدينا:</b>\n"
+        "• بطاقات 3D (أمريكية 🇺🇸 / كندية 🇨🇦) - نسبة نجاح 65%.\n"
+        "• بطاقات Non vbv أمريكية 🇺🇸 - نسبة نجاح 70%.\n\n"
+        "💎 <b>لماذا تختارنا؟</b>\n"
+        "✅ <b>تسليم فوري</b> بمجرد إتمام الدفع.\n"
+        "✅ <b>ضمان استبدال</b> فوري في حال وجود أي خلل بالبطاقة.\n"
+        "✅ <b>دعم فني 24/7</b> لمساعدتك في أي وقت.\n\n"
+        "👇 اختر من القائمة أدناه للبدء:"
     )
     kb = [
         [InlineKeyboardButton("🛒 شراء بطاقة الآن", callback_data="buy")],
@@ -99,7 +109,6 @@ async def buy_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     try: await q.answer()
     except: pass
-    # مطابق للصورة الأولى
     text = "عروض البطاقات المسروقة\n\nنسبة نجاح 65%"
     kb = [
         [InlineKeyboardButton("بطاقات 3D", callback_data="cat_3d")],
@@ -121,7 +130,6 @@ async def card_type(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     if q.data == "cat_3d":
-        # مطابق للصورة الثانية
         text = "يتوفر هنا أنواع البطاقات المسروقه"
         kb = [
             [InlineKeyboardButton("بطاقة أمريكية 🇺🇸", callback_data="show_3d_usa")],
@@ -132,7 +140,6 @@ async def card_type(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return CARD_TYPE
     
     if q.data == "cat_non_vbv":
-        # عرض تفاصيل Non VBV مطابق للصورة الرابعة
         ctx.user_data["type"] = "non_vbv_usa"
         text = (
             "📝 اسم السلعة: بطاقة Non vbv أمريكية 🇺🇸\n"
@@ -160,7 +167,6 @@ async def show_product(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     if q.data == "show_3d_usa":
         ctx.user_data["type"] = "3d_usa"
-        # مطابق للصورة الثالثة
         text = (
             "📝 اسم السلعة: بطاقة أمريكية 🇺🇸\n"
             "📝 وصف السلعة: بطاقات 3D\n\n"
@@ -197,7 +203,6 @@ async def confirm_purchase(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if q.data == "buy":
          return await buy_start(update, ctx)
 
-    # حفظ السعر الأساسي بناءً على المنتج المختار
     product_type = ctx.user_data.get("type")
     if not product_type:
         await q.message.reply_text("⚠️ حدث خطأ، يرجى إرسال /start من جديد.")
