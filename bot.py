@@ -21,7 +21,6 @@ WELCOME_IMG_URL = "https://i.postimg.cc/W3wqHpRY/C38048D5-D90A-4621-9042-EBF53C2
 WALLETS = {"usdt_bep20": "0x85a8c35aD7c9CfB7812269a6E597bDaAC3d9Bd2E"}
 PAY_METHODS = {"usdt_bep20": "USDT (BEP20)"}
 
-# الأسعار مخزنة هنا بناءً على الصور
 PRICES = {
     "3d_usa": {"price": 25, "name": "بطاقة أمريكية 3D"},
     "3d_canada": {"price": 25, "name": "بطاقة كندية 3D"},
@@ -56,10 +55,10 @@ def validate_coupon(code: str):
     if c["used"] >= c["max_uses"]: return False, 0, "❌ الكود خلصت استخداماته."
     return True, c["percent"], f"✅ تم تطبيق خصم {c['percent']}%"
 
-# الحالات
-CARD_TYPE, AMOUNT, COUPON, PAYMENT = range(4)
+# الحالات (أضفنا حالة PROOF لاستقبال الصور)
+CARD_TYPE, AMOUNT, COUPON, PAYMENT, PROOF = range(5)
 
-# ============ MENU (تم تعديل الرسالة هنا) ============
+# ============ MENU ============
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
         "👋 <b>أهلاً بك في متجر Card.cvvl</b>\n"
@@ -257,12 +256,15 @@ async def payment(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if d["coupon"]: COUPONS[d["coupon"]]["used"] += 1
     save_data()
     
+    # حفظ رقم الطلب في بيانات المستخدم لكي نستخدمه عند استلام الصورة
+    ctx.user_data["current_order_id"] = order['id']
+    
     wallet_address = WALLETS.get(d["pay"], "⚠️ No wallet available")
     pay_name = PAY_METHODS[d["pay"]]
     coupon_line = f"🎟️ كوبون: {d['coupon']} (-{percent}%)\n" if d["coupon"] else ""
     product_name = PRICES[d["type"]]["name"]
     
-    admin_msg = (f"🆕 طلب #{order['id']}\n\n👤 @{username} ({user_id})\n💳 {product_name}\n💵 الأصلي: {base}$\n{coupon_line}✅ المطلوب: {final}$\n💳 الدفع: {pay_name}\n")
+    admin_msg = (f"🆕 طلب جديد (بانتظار الدفع) #{order['id']}\n\n👤 @{username} ({user_id})\n💳 {product_name}\n💵 الأصلي: {base}$\n{coupon_line}✅ المطلوب: {final}$\n💳 الدفع: {pay_name}\n")
     try: await ctx.bot.send_message(ADMIN_ID, admin_msg)
     except Exception as e: logging.error(f"Failed to send admin message: {e}")
     
@@ -277,6 +279,36 @@ async def payment(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logging.error(f"Failed to send user message: {e}")
         await q.message.reply_text(f"عنوان المحفظة:\n{wallet_address}")
+    
+    # بدلاً من إنهاء المحادثة، ننقلها لحالة PROOF لانتظار الصورة
+    return PROOF
+
+# ============ دالة استقبال إثبات الدفع ============
+async def receive_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    username = update.message.from_user.username or "no_username"
+    order_id = ctx.user_data.get("current_order_id", "Unknown")
+    
+    # رسالة تحذيرية للأدمن قبل تحويل الصورة
+    admin_header = f"🧾 <b>إثبات دفع جديد!</b>\n\nالطلب: #{order_id}\nالزبون: @{username} ({user_id})\n\nالصورة/الرسالة في الأسفل 👇"
+    
+    try:
+        # إرسال نص للأدمن
+        await ctx.bot.send_message(ADMIN_ID, admin_header, parse_mode="HTML")
+        
+        # تحويل الرسالة (صورة أو نص) للأدمن
+        await update.message.forward(ADMIN_ID)
+        
+        # الرد على الزبون
+        await update.message.reply_text(
+            "✅ <b>تم استلام إثبات التحويل بنجاح!</b>\n\n"
+            "سيتم مراجعة الدفع وتسليم البطاقة في أقرب وقت ممكن. شكراً لثقتك بنا! 🌹",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logging.error(f"Error forwarding proof: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء إرسال الإثبات. يرجى التواصل مع الدعم.")
+        
     return ConversationHandler.END
 
 async def cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -350,7 +382,11 @@ def main():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, coupon_input), 
                 CommandHandler("skip", coupon_skip)
             ],
-            PAYMENT: [CallbackQueryHandler(payment)]
+            PAYMENT: [CallbackQueryHandler(payment)],
+            # الحالة الجديدة: استقبال الصور أو النصوص (TXID)
+            PROOF: [
+                MessageHandler(filters.PHOTO | filters.Document.IMAGE | filters.TEXT & ~filters.COMMAND, receive_proof)
+            ]
         },
         fallbacks=[CommandHandler("cancel", cancel)], per_message=False 
     )
