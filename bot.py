@@ -55,7 +55,7 @@ def validate_coupon(code: str):
     if c["used"] >= c["max_uses"]: return False, 0, "❌ الكود خلصت استخداماته."
     return True, c["percent"], f"✅ تم تطبيق خصم {c['percent']}%"
 
-# الحالات (أضفنا حالة PROOF لاستقبال الصور)
+# الحالات
 CARD_TYPE, AMOUNT, COUPON, PAYMENT, PROOF = range(5)
 
 # ============ MENU ============
@@ -256,7 +256,6 @@ async def payment(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if d["coupon"]: COUPONS[d["coupon"]]["used"] += 1
     save_data()
     
-    # حفظ رقم الطلب في بيانات المستخدم لكي نستخدمه عند استلام الصورة
     ctx.user_data["current_order_id"] = order['id']
     
     wallet_address = WALLETS.get(d["pay"], "⚠️ No wallet available")
@@ -280,10 +279,9 @@ async def payment(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         logging.error(f"Failed to send user message: {e}")
         await q.message.reply_text(f"عنوان المحفظة:\n{wallet_address}")
     
-    # بدلاً من إنهاء المحادثة، ننقلها لحالة PROOF لانتظار الصورة
     return PROOF
 
-# ============ دالة استقبال إثبات الدفع (تم تعديلها) ============
+# ============ دالة استقبال إثبات الدفع (محدثة) ============
 async def receive_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     username = update.message.from_user.username or "no_username"
@@ -293,12 +291,20 @@ async def receive_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     
     try:
         # إرسال النص التعريفي للأدمن
-        await ctx.bot.send_message(ADMIN_ID, admin_header, parse_mode="HTML")
+        await ctx.bot.send_message(chat_id=ADMIN_ID, text=admin_header, parse_mode="HTML")
         
-        # استخدام copy_message بدلاً من forward لضمان الموثوقية
-        await update.message.copy(chat_id=ADMIN_ID)
+        # إرسال الصورة أو النص باستخدام الدوال المناسبة
+        if update.message.photo:
+            photo_file_id = update.message.photo[-1].file_id
+            await ctx.bot.send_photo(chat_id=ADMIN_ID, photo=photo_file_id, caption=f"صورة إثبات للطلب #{order_id}")
+        elif update.message.document:
+            doc_file_id = update.message.document.file_id
+            await ctx.bot.send_document(chat_id=ADMIN_ID, document=doc_file_id, caption=f"ملف إثبات للطلب #{order_id}")
+        elif update.message.text:
+            await ctx.bot.send_message(chat_id=ADMIN_ID, text=f"نص الإثبات للطلب #{order_id}:\n{update.message.text}")
+        else:
+            await ctx.bot.send_message(chat_id=ADMIN_ID, text=f"⚠️ وصل إثبات غير مدعوم للطلب #{order_id}.")
         
-        # الرد على الزبون
         await update.message.reply_text(
             "✅ <b>تم استلام إثبات التحويل بنجاح!</b>\n\n"
             "سيتم مراجعة الدفع وتسليم البطاقة في أقرب وقت ممكن. شكراً لثقتك بنا! 🌹",
@@ -306,7 +312,7 @@ async def receive_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
     except Exception as e:
         logging.error(f"Error forwarding proof: {e}")
-        # رسالة خطأ أكثر تحديداً للمستخدم
+        # إذا فشل الإرسال، تأكد من أن ADMIN_ID صحيح وأنك بدأت محادثة مع البوت
         await update.message.reply_text(
             "❌ حدث خطأ أثناء إرسال الإثبات. يرجى التواصل مع الدعم مباشرة: @b9j01",
             parse_mode="HTML"
@@ -386,7 +392,6 @@ def main():
                 CommandHandler("skip", coupon_skip)
             ],
             PAYMENT: [CallbackQueryHandler(payment)],
-            # الحالة الجديدة: استقبال الصور أو النصوص (TXID)
             PROOF: [
                 MessageHandler(filters.PHOTO | filters.Document.IMAGE | filters.TEXT & ~filters.COMMAND, receive_proof)
             ]
