@@ -283,21 +283,20 @@ async def payment(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     # بدلاً من إنهاء المحادثة، ننقلها لحالة PROOF لانتظار الصورة
     return PROOF
 
-# ============ دالة استقبال إثبات الدفع ============
+# ============ دالة استقبال إثبات الدفع (تم تعديلها) ============
 async def receive_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     username = update.message.from_user.username or "no_username"
     order_id = ctx.user_data.get("current_order_id", "Unknown")
     
-    # رسالة تحذيرية للأدمن قبل تحويل الصورة
-    admin_header = f"🧾 <b>إثبات دفع جديد!</b>\n\nالطلب: #{order_id}\nالزبون: @{username} ({user_id})\n\nالصورة/الرسالة في الأسفل 👇"
+    admin_header = f"🧾 <b>إثبات دفع جديد!</b>\n\nالطلب: #{order_id}\nالزبون: @{username} ({user_id})\n\n"
     
     try:
-        # إرسال نص للأدمن
+        # إرسال النص التعريفي للأدمن
         await ctx.bot.send_message(ADMIN_ID, admin_header, parse_mode="HTML")
         
-        # تحويل الرسالة (صورة أو نص) للأدمن
-        await update.message.forward(ADMIN_ID)
+        # استخدام copy_message بدلاً من forward لضمان الموثوقية
+        await update.message.copy(chat_id=ADMIN_ID)
         
         # الرد على الزبون
         await update.message.reply_text(
@@ -307,7 +306,11 @@ async def receive_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
     except Exception as e:
         logging.error(f"Error forwarding proof: {e}")
-        await update.message.reply_text("❌ حدث خطأ أثناء إرسال الإثبات. يرجى التواصل مع الدعم.")
+        # رسالة خطأ أكثر تحديداً للمستخدم
+        await update.message.reply_text(
+            "❌ حدث خطأ أثناء إرسال الإثبات. يرجى التواصل مع الدعم مباشرة: @b9j01",
+            parse_mode="HTML"
+        )
         
     return ConversationHandler.END
 
